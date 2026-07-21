@@ -40,7 +40,7 @@ Create a GitHub token with access to read public profile contribution data, then
 GITHUB_TOKEN=github_pat_xxx npm run generate:svg -- \
   --username UlongChaS2 \
   --output dist/mowmow.svg \
-  --traversal top-to-bottom
+  --traversal nearest
 ```
 
 Options:
@@ -48,7 +48,7 @@ Options:
 ```text
 --username     GitHub username. If omitted, mock data is used.
 --output       Output SVG path. Default: dist/mowmow.svg
---traversal    snake | top-to-bottom | random
+--traversal    snake | top-to-bottom | nearest | random
 --rows         Grid rows. Default: 5
 --columns      Grid columns. Default: 10
 ```
@@ -78,7 +78,7 @@ jobs:
         with:
           username: ${{ github.repository_owner }}
           output: dist/mowmow.svg
-          traversal: top-to-bottom
+          traversal: nearest
           rows: "7"
           columns: "53"
         env:

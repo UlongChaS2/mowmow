@@ -15,6 +15,7 @@ const speedOptions: AnimationSpeed[] = ["slow", "normal", "fast"];
 const traversalModeOptions: TraversalMode[] = [
   "snake",
   "top-to-bottom",
+  "nearest",
   "random",
 ];
 
@@ -27,6 +28,7 @@ const speedLabels: Record<AnimationSpeed, string> = {
 const traversalModeLabels: Record<TraversalMode, string> = {
   snake: "Snake",
   "top-to-bottom": "Vertical snake",
+  nearest: "Nearest",
   random: "Random",
 };
 

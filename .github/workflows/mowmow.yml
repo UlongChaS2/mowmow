@@ -25,7 +25,7 @@ jobs:
         run: npm ci
 
       - name: Generate SVG
-        run: npm run generate:svg -- --username "${{ github.repository_owner }}" --output dist/mowmow.svg --traversal top-to-bottom
+        run: npm run generate:svg -- --username "${{ github.repository_owner }}" --output dist/mowmow.svg --traversal nearest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -15,7 +15,7 @@ inputs:
     required: false
     default: dist/mowmow.svg
   traversal:
-    description: "Traversal mode: snake, top-to-bottom, or random."
+    description: "Traversal mode: snake, top-to-bottom, nearest, or random."
     required: false
     default: top-to-bottom
   rows:

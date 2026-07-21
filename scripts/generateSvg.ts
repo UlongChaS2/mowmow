@@ -14,7 +14,12 @@ type CliOptions = {
   columns: number;
 };
 
-const traversalModes: TraversalMode[] = ["snake", "top-to-bottom", "random"];
+const traversalModes: TraversalMode[] = [
+  "snake",
+  "top-to-bottom",
+  "nearest",
+  "random",
+];
 
 const parseCliOptions = (args: string[]): CliOptions => {
   const options: CliOptions = {

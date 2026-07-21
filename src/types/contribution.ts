@@ -22,4 +22,4 @@ export type AnimationSpeed = "slow" | "normal" | "fast";
 
 export type AnimationPhase = "move" | "eat";
 
-export type TraversalMode = "snake" | "top-to-bottom" | "random";
+export type TraversalMode = "snake" | "top-to-bottom" | "nearest" | "random";

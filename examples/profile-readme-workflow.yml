@@ -20,7 +20,7 @@ jobs:
         with:
           username: ${{ github.repository_owner }}
           output: dist/mowmow.svg
-          traversal: top-to-bottom
+          traversal: nearest
           rows: "7"
           columns: "53"
         env:

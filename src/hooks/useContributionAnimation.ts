@@ -81,6 +81,7 @@ export const useContributionAnimation = (): UseContributionAnimationResult => {
         GRID_COLUMNS,
         traversalMode,
         randomPathVersion,
+        mockContributions,
       ),
     [randomPathVersion, traversalMode],
   );
