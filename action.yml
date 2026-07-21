@@ -8,22 +8,22 @@ branding:
 
 inputs:
   username:
-    description: GitHub username whose contributions should be rendered.
+    description: "GitHub username whose contributions should be rendered."
     required: true
   output:
-    description: Output SVG path relative to the caller repository.
+    description: "Output SVG path relative to the caller repository."
     required: false
     default: dist/mowmow.svg
   traversal:
-    description: Traversal mode: snake, top-to-bottom, or random.
+    description: "Traversal mode: snake, top-to-bottom, or random."
     required: false
     default: top-to-bottom
   rows:
-    description: Number of grid rows.
+    description: "Number of grid rows."
     required: false
     default: "7"
   columns:
-    description: Number of grid columns.
+    description: "Number of grid columns."
     required: false
     default: "53"
 
