@@ -1,6 +1,7 @@
 import type {
   ContributionGridData,
   ContributionLevel,
+  CharacterDirection,
   GridPosition,
   TraversalMode,
 } from "../types/contribution";
@@ -9,7 +10,7 @@ import { CELL_GAP, CELL_SIZE, CHARACTER_SIZE } from "../utils/contribution";
 
 type GenerateContributionPetSvgOptions = {
   grid: ContributionGridData;
-  characterDataUri: string;
+  characterDataUris: Record<CharacterDirection, string>;
   title?: string;
   frameDelayMs?: number;
   eatDelayMs?: number;
@@ -19,6 +20,8 @@ type GenerateContributionPetSvgOptions = {
 type TimelineFrame = {
   elapsedMs: number;
   headIndex: number;
+  direction: CharacterDirection;
+  isEating: boolean;
 };
 
 const CONTRIBUTION_COLORS: Record<ContributionLevel, string> = {
@@ -46,6 +49,25 @@ const getAnimationPoint = (position: GridPosition): string => {
   return `${center.x},${center.y - CHARACTER_SIZE / 2 + 10}`;
 };
 
+const getDirection = (
+  current: GridPosition,
+  next: GridPosition,
+): CharacterDirection => {
+  if (next.row < current.row) {
+    return "back";
+  }
+
+  if (next.row > current.row) {
+    return "front";
+  }
+
+  if (next.col < current.col) {
+    return "left";
+  }
+
+  return "right";
+};
+
 const toKeyTime = (elapsedMs: number, totalDurationMs: number): string => {
   if (totalDurationMs === 0) {
     return "0";
@@ -60,26 +82,67 @@ const createTimelineFrames = (
   frameDelayMs: number,
   eatDelayMs: number,
 ): TimelineFrame[] => {
-  const frames: TimelineFrame[] = [{ elapsedMs: 0, headIndex: 0 }];
+  const initialDirection =
+    path.length > 1 ? getDirection(path[0], path[1]) : "front";
+  const frames: TimelineFrame[] = [
+    {
+      elapsedMs: 0,
+      headIndex: 0,
+      direction: initialDirection,
+      isEating: false,
+    },
+  ];
   let elapsed = 0;
+  let currentDirection = initialDirection;
 
   path.forEach((position, index) => {
     if (grid[position.row][position.col] > 0) {
       elapsed += eatDelayMs;
-      frames.push({ elapsedMs: elapsed, headIndex: index });
+      frames.push({
+        elapsedMs: elapsed,
+        headIndex: index,
+        direction: currentDirection,
+        isEating: true,
+      });
     }
 
     if (index < path.length - 1) {
+      currentDirection = getDirection(position, path[index + 1]);
       elapsed += frameDelayMs;
       frames.push({
         elapsedMs: elapsed,
         headIndex: index + 1,
+        direction: currentDirection,
+        isEating: false,
       });
     }
   });
 
   return frames;
 };
+
+const createDirectionOpacityTimeline = (
+  frames: TimelineFrame[],
+  totalDuration: number,
+  direction: CharacterDirection,
+): { values: string; keyTimes: string } => ({
+  values: frames
+    .map((frame) => (frame.direction === direction ? "1" : "0"))
+    .join(";"),
+  keyTimes: frames
+    .map((frame) => toKeyTime(frame.elapsedMs, totalDuration))
+    .join(";"),
+});
+
+const createEatingOpacityTimeline = (
+  frames: TimelineFrame[],
+  totalDuration: number,
+): { values: string; keyTimes: string } => ({
+  values: frames.map((frame) => (frame.isEating ? "1" : "0")).join(";"),
+  keyTimes: frames
+    .map((frame) => toKeyTime(frame.elapsedMs, totalDuration))
+    .join(";"),
+});
 
 const createMotionTimeline = (
   path: GridPosition[],
@@ -127,7 +190,7 @@ const getEatKeyTimes = (
 
 export const generateContributionPetSvg = ({
   grid,
-  characterDataUri,
+  characterDataUris,
   title = "MowMow",
   frameDelayMs = 240,
   eatDelayMs = 380,
@@ -146,6 +209,7 @@ export const generateContributionPetSvg = ({
     frames,
     totalDuration,
   );
+  const eatingTimeline = createEatingOpacityTimeline(frames, totalDuration);
   const durationSeconds = `${(totalDuration / 1000).toFixed(2)}s`;
 
   const cells = grid
@@ -163,6 +227,17 @@ export const generateContributionPetSvg = ({
       }),
     )
     .join("");
+  const characterImages = (["front", "left", "right", "back"] as const)
+    .map((direction) => {
+      const opacityTimeline = createDirectionOpacityTimeline(
+        frames,
+        totalDuration,
+        direction,
+      );
+
+      return `<image href="${characterDataUris[direction]}" width="${CHARACTER_SIZE}" height="${CHARACTER_SIZE}" x="${-CHARACTER_SIZE / 2}" y="${-CHARACTER_SIZE / 2}" preserveAspectRatio="xMidYMid meet" opacity="0"><animate attributeName="opacity" values="${opacityTimeline.values}" keyTimes="${opacityTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" /></image>`;
+    })
+    .join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
@@ -171,10 +246,26 @@ export const generateContributionPetSvg = ({
   <rect width="${width}" height="${height}" rx="10" fill="#f8fbf5" />
   <g transform="translate(24 36)">
     ${cells}
-    <image href="${characterDataUri}" width="${CHARACTER_SIZE}" height="${CHARACTER_SIZE}" x="${-CHARACTER_SIZE / 2}" y="${-CHARACTER_SIZE / 2}" preserveAspectRatio="xMidYMid meet">
-      <animate attributeName="opacity" values="1;1;0.92;1" dur="0.9s" repeatCount="indefinite" />
+    <g>
       <animateMotion dur="${durationSeconds}" repeatCount="indefinite" calcMode="linear" keyTimes="${motionTimeline.keyTimes}" values="${motionTimeline.points}" />
-    </image>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;2 -1;-1 1;0 0" dur="0.52s" repeatCount="indefinite" additive="sum" />
+        <animateTransform attributeName="transform" type="rotate" values="0;-1.2;0.8;0" dur="0.52s" repeatCount="indefinite" additive="sum" />
+        ${characterImages}
+        <g opacity="0">
+          <animate attributeName="opacity" values="${eatingTimeline.values}" keyTimes="${eatingTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" />
+          <circle cx="18" cy="15" r="2" fill="#2f8f45">
+            <animateTransform attributeName="transform" type="translate" values="0 0;8 -3;16 -6" dur="0.52s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="22" cy="22" r="1.6" fill="#56bd58">
+            <animateTransform attributeName="transform" type="translate" values="0 0;10 1;18 -2" dur="0.52s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="14" cy="24" r="1.8" fill="#176734">
+            <animateTransform attributeName="transform" type="translate" values="0 0;7 3;15 1" dur="0.52s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      </g>
+    </g>
   </g>
 </svg>
 `;

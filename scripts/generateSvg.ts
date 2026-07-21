@@ -78,13 +78,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const options = parseCliOptions(process.argv.slice(2));
-const characterPath = path.join(
-  rootDir,
-  "public",
-  "assets",
-  "lemon",
-  "front.png",
-);
+const characterDirections = ["front", "left", "right", "back"] as const;
 const outputPath = path.resolve(rootDir, options.output);
 const outputDir = path.dirname(outputPath);
 const githubToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
@@ -104,11 +98,24 @@ const grid =
       })
     : mockContributions;
 
-const characterBuffer = await readFile(characterPath);
-const characterDataUri = `data:image/png;base64,${characterBuffer.toString("base64")}`;
+const characterDataUriEntries = await Promise.all(
+  characterDirections.map(async (direction) => {
+    const characterBuffer = await readFile(
+      path.join(rootDir, "public", "assets", "lemon", `${direction}.png`),
+    );
+
+    return [
+      direction,
+      `data:image/png;base64,${characterBuffer.toString("base64")}`,
+    ] as const;
+  }),
+);
 const svg = generateContributionPetSvg({
   grid,
-  characterDataUri,
+  characterDataUris: Object.fromEntries(characterDataUriEntries) as Record<
+    (typeof characterDirections)[number],
+    string
+  >,
   traversalMode: options.traversalMode,
 });
 
