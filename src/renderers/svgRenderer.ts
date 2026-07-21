@@ -235,7 +235,7 @@ export const generateContributionPetSvg = ({
         direction,
       );
 
-      return `<image href="${characterDataUris[direction]}" width="${CHARACTER_SIZE}" height="${CHARACTER_SIZE}" x="${-CHARACTER_SIZE / 2}" y="${-CHARACTER_SIZE / 2}" preserveAspectRatio="xMidYMid meet" opacity="0"><animate attributeName="opacity" values="${opacityTimeline.values}" keyTimes="${opacityTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" /></image>`;
+      return `<image href="${characterDataUris[direction]}" width="${CHARACTER_SIZE}" height="${CHARACTER_SIZE}" x="${-CHARACTER_SIZE / 2}" y="${-CHARACTER_SIZE / 2}" preserveAspectRatio="xMidYMid meet" opacity="0" style="image-rendering:pixelated"><animate attributeName="opacity" values="${opacityTimeline.values}" keyTimes="${opacityTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" /></image>`;
     })
     .join("");
 

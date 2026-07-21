@@ -4,7 +4,7 @@ export const GRID_COLUMNS = 10;
 export const GRID_ROWS = 5;
 export const CELL_SIZE = 22;
 export const CELL_GAP = 7;
-export const CHARACTER_SIZE = 58;
+export const CHARACTER_SIZE = 64;
 
 export const SPEED_DELAYS: Record<AnimationSpeed, { move: number; eat: number }> = {
   slow: { move: 680, eat: 650 },
