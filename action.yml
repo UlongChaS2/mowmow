@@ -1,0 +1,45 @@
+name: MowMow
+description: Generate an animated lawn-mowing contribution SVG for a GitHub profile README.
+author: UlongChaS2
+
+branding:
+  icon: activity
+  color: green
+
+inputs:
+  username:
+    description: GitHub username whose contributions should be rendered.
+    required: true
+  output:
+    description: Output SVG path relative to the caller repository.
+    required: false
+    default: dist/mowmow.svg
+  traversal:
+    description: Traversal mode: snake, top-to-bottom, or random.
+    required: false
+    default: top-to-bottom
+  rows:
+    description: Number of grid rows.
+    required: false
+    default: "7"
+  columns:
+    description: Number of grid columns.
+    required: false
+    default: "53"
+
+runs:
+  using: composite
+  steps:
+    - name: Install generator dependencies
+      shell: bash
+      run: npm ci --prefix "$GITHUB_ACTION_PATH"
+
+    - name: Generate MowMow SVG
+      shell: bash
+      run: |
+        npm run --prefix "$GITHUB_ACTION_PATH" generate:svg -- \
+          --username "${{ inputs.username }}" \
+          --output "$GITHUB_WORKSPACE/${{ inputs.output }}" \
+          --traversal "${{ inputs.traversal }}" \
+          --rows "${{ inputs.rows }}" \
+          --columns "${{ inputs.columns }}"

@@ -1,0 +1,33 @@
+name: Generate MowMow
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout profile repository
+        uses: actions/checkout@v4
+
+      - name: Generate MowMow
+        uses: UlongChaS2/mowmow@main
+        with:
+          username: ${{ github.repository_owner }}
+          output: dist/mowmow.svg
+          traversal: top-to-bottom
+          rows: "7"
+          columns: "53"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit generated SVG
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update mowmow"
+          file_pattern: dist/mowmow.svg

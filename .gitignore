@@ -1,0 +1,7 @@
+dist/*
+!dist/mowmow.svg
+node_modules
+.generated-scripts
+.DS_Store
+*.local
+*.tsbuildinfo
