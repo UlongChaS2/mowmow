@@ -15,6 +15,7 @@ type GenerateContributionPetSvgOptions = {
   frameDelayMs?: number;
   eatDelayMs?: number;
   traversalMode?: TraversalMode;
+  randomSeed?: number;
 };
 
 type TimelineFrame = {
@@ -22,6 +23,16 @@ type TimelineFrame = {
   headIndex: number;
   direction: CharacterDirection;
   isEating: boolean;
+};
+
+const CHARACTER_RENDER_BOX: Record<
+  CharacterDirection,
+  { size: number; offsetX: number; offsetY: number }
+> = {
+  front: { size: CHARACTER_SIZE, offsetX: 0, offsetY: 0 },
+  left: { size: CHARACTER_SIZE * 1.18, offsetX: -2, offsetY: -4 },
+  right: { size: CHARACTER_SIZE * 1.18, offsetX: 2, offsetY: -4 },
+  back: { size: CHARACTER_SIZE * 1.14, offsetX: 0, offsetY: -3 },
 };
 
 const CONTRIBUTION_COLORS: Record<ContributionLevel, string> = {
@@ -134,16 +145,6 @@ const createDirectionOpacityTimeline = (
     .join(";"),
 });
 
-const createEatingOpacityTimeline = (
-  frames: TimelineFrame[],
-  totalDuration: number,
-): { values: string; keyTimes: string } => ({
-  values: frames.map((frame) => (frame.isEating ? "1" : "0")).join(";"),
-  keyTimes: frames
-    .map((frame) => toKeyTime(frame.elapsedMs, totalDuration))
-    .join(";"),
-});
-
 const createMotionTimeline = (
   path: GridPosition[],
   frames: TimelineFrame[],
@@ -159,57 +160,78 @@ const createMotionTimeline = (
   };
 };
 
-const getEatKeyTimes = (
+const getCellClearAnimation = (
   path: GridPosition[],
   grid: ContributionGridData,
   frameDelayMs: number,
   eatDelayMs: number,
   totalDuration: number,
   position: GridPosition,
+  level: ContributionLevel,
 ): string => {
   let elapsed = 0;
 
-  for (const currentPosition of path) {
+  for (let index = 0; index < path.length; index += 1) {
+    const currentPosition = path[index];
+
     if (
       currentPosition.row === position.row &&
       currentPosition.col === position.col
     ) {
-      elapsed += eatDelayMs;
-      return `0;${toKeyTime(elapsed, totalDuration)};1`;
+      const clearStartMs = elapsed + eatDelayMs * 0.72;
+      const clearEndMs = clearStartMs + 1;
+      const keyTimes = [
+        "0",
+        toKeyTime(clearStartMs, totalDuration),
+        toKeyTime(clearEndMs, totalDuration),
+        "1",
+      ].join(";");
+      const values = [
+        CONTRIBUTION_COLORS[level],
+        CONTRIBUTION_COLORS[level],
+        CONTRIBUTION_COLORS[0],
+        CONTRIBUTION_COLORS[0],
+      ].join(";");
+
+      return `<animate attributeName="fill" values="${values}" keyTimes="${keyTimes}" dur="${(totalDuration / 1000).toFixed(2)}s" repeatCount="indefinite" />`;
     }
 
     if (grid[currentPosition.row][currentPosition.col] > 0) {
       elapsed += eatDelayMs;
     }
 
-    elapsed += frameDelayMs;
+    if (index < path.length - 1) {
+      elapsed += frameDelayMs;
+    }
   }
 
-  return "0;1";
+  return "";
 };
 
 export const generateContributionPetSvg = ({
   grid,
   characterDataUris,
   title = "MowMow",
-  frameDelayMs = 240,
-  eatDelayMs = 380,
+  frameDelayMs = 620,
+  eatDelayMs = 620,
   traversalMode = "snake",
+  randomSeed = 0,
 }: GenerateContributionPetSvgOptions): string => {
   const rows = grid.length;
   const columns = grid[0]?.length ?? 0;
-  const path = createTraversalPath(rows, columns, traversalMode, 0, grid);
+  const path = createTraversalPath(rows, columns, traversalMode, randomSeed, grid);
   const frames = createTimelineFrames(path, grid, frameDelayMs, eatDelayMs);
   const totalDuration = frames[frames.length - 1]?.elapsedMs ?? 1;
   const width = columns * CELL_SIZE + Math.max(0, columns - 1) * CELL_GAP + 48;
   const gridHeight = rows * CELL_SIZE + Math.max(0, rows - 1) * CELL_GAP;
-  const height = gridHeight + 74;
+  const topPadding = 70;
+  const bottomPadding = 42;
+  const height = gridHeight + topPadding + bottomPadding;
   const motionTimeline = createMotionTimeline(
     path,
     frames,
     totalDuration,
   );
-  const eatingTimeline = createEatingOpacityTimeline(frames, totalDuration);
   const durationSeconds = `${(totalDuration / 1000).toFixed(2)}s`;
 
   const cells = grid
@@ -220,7 +242,15 @@ export const generateContributionPetSvg = ({
         const y = rowIndex * (CELL_SIZE + CELL_GAP);
         const eatAnimation =
           level > 0
-            ? `<animate attributeName="fill" values="${CONTRIBUTION_COLORS[level]};${CONTRIBUTION_COLORS[0]};${CONTRIBUTION_COLORS[0]}" keyTimes="${getEatKeyTimes(path, grid, frameDelayMs, eatDelayMs, totalDuration, position)}" dur="${durationSeconds}" repeatCount="indefinite" />`
+            ? getCellClearAnimation(
+                path,
+                grid,
+                frameDelayMs,
+                eatDelayMs,
+                totalDuration,
+                position,
+                level,
+              )
             : "";
 
         return `<rect x="${x}" y="${y}" width="${CELL_SIZE}" height="${CELL_SIZE}" rx="5" fill="${CONTRIBUTION_COLORS[level]}">${eatAnimation}</rect>`;
@@ -234,8 +264,11 @@ export const generateContributionPetSvg = ({
         totalDuration,
         direction,
       );
+      const renderBox = CHARACTER_RENDER_BOX[direction];
+      const imageX = -renderBox.size / 2 + renderBox.offsetX;
+      const imageY = -renderBox.size / 2 + renderBox.offsetY;
 
-      return `<image href="${characterDataUris[direction]}" width="${CHARACTER_SIZE}" height="${CHARACTER_SIZE}" x="${-CHARACTER_SIZE / 2}" y="${-CHARACTER_SIZE / 2}" preserveAspectRatio="xMidYMid meet" opacity="0" style="image-rendering:pixelated"><animate attributeName="opacity" values="${opacityTimeline.values}" keyTimes="${opacityTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" /></image>`;
+      return `<image href="${characterDataUris[direction]}" width="${renderBox.size}" height="${renderBox.size}" x="${imageX}" y="${imageY}" preserveAspectRatio="xMidYMid meet" opacity="0" style="image-rendering:pixelated"><animate attributeName="opacity" values="${opacityTimeline.values}" keyTimes="${opacityTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" calcMode="discrete" /></image>`;
     })
     .join("");
 
@@ -243,27 +276,12 @@ export const generateContributionPetSvg = ({
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
   <title id="title">${escapeXml(title)}</title>
   <desc id="desc">MowMow mows across a GitHub contribution grid and clears active cells.</desc>
-  <rect width="${width}" height="${height}" rx="10" fill="#f8fbf5" />
-  <g transform="translate(24 36)">
+  <g transform="translate(24 ${topPadding})">
     ${cells}
     <g>
       <animateMotion dur="${durationSeconds}" repeatCount="indefinite" calcMode="linear" keyTimes="${motionTimeline.keyTimes}" values="${motionTimeline.points}" />
       <g>
-        <animateTransform attributeName="transform" type="translate" values="0 0;2 -1;-1 1;0 0" dur="0.52s" repeatCount="indefinite" additive="sum" />
-        <animateTransform attributeName="transform" type="rotate" values="0;-1.2;0.8;0" dur="0.52s" repeatCount="indefinite" additive="sum" />
         ${characterImages}
-        <g opacity="0">
-          <animate attributeName="opacity" values="${eatingTimeline.values}" keyTimes="${eatingTimeline.keyTimes}" dur="${durationSeconds}" repeatCount="indefinite" />
-          <circle cx="18" cy="15" r="2" fill="#2f8f45">
-            <animateTransform attributeName="transform" type="translate" values="0 0;8 -3;16 -6" dur="0.52s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="22" cy="22" r="1.6" fill="#56bd58">
-            <animateTransform attributeName="transform" type="translate" values="0 0;10 1;18 -2" dur="0.52s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="14" cy="24" r="1.8" fill="#176734">
-            <animateTransform attributeName="transform" type="translate" values="0 0;7 3;15 1" dur="0.52s" repeatCount="indefinite" />
-          </circle>
-        </g>
       </g>
     </g>
   </g>

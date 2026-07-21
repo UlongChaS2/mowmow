@@ -1,8 +1,10 @@
 import type {
   ContributionGridData,
+  ContributionLevel,
   GridPosition,
   TraversalMode,
 } from "../types/contribution";
+import { createSeededRandom, type SeededRandom } from "./random";
 
 const getPositionKey = (position: GridPosition): string =>
   `${position.row}-${position.col}`;
@@ -10,28 +12,132 @@ const getPositionKey = (position: GridPosition): string =>
 const manhattanDistance = (from: GridPosition, to: GridPosition): number =>
   Math.abs(from.row - to.row) + Math.abs(from.col - to.col);
 
+type ContributionTarget = {
+  level: ContributionLevel;
+  position: GridPosition;
+};
+
+const toPosition = (key: string): GridPosition => {
+  const [row, col] = key.split("-").map(Number);
+  return { row, col };
+};
+
+const createTargetMap = (grid: ContributionGridData): Map<string, ContributionTarget> =>
+  new Map(
+    grid
+      .flatMap((row, rowIndex) =>
+        row.map((level, colIndex) => ({
+          level,
+          position: { row: rowIndex, col: colIndex },
+        })),
+      )
+      .filter((item) => item.level > 0)
+      .map((item) => [getPositionKey(item.position), item]),
+  );
+
 const appendManhattanPath = (
   path: GridPosition[],
   from: GridPosition,
   to: GridPosition,
+  verticalFirst = false,
 ): void => {
   let current = { ...from };
 
-  while (current.col !== to.col) {
-    current = {
-      row: current.row,
-      col: current.col + (to.col > current.col ? 1 : -1),
-    };
-    path.push(current);
+  const appendHorizontalSteps = () => {
+    while (current.col !== to.col) {
+      current = {
+        row: current.row,
+        col: current.col + (to.col > current.col ? 1 : -1),
+      };
+      path.push(current);
+    }
+  };
+
+  const appendVerticalSteps = () => {
+    while (current.row !== to.row) {
+      current = {
+        row: current.row + (to.row > current.row ? 1 : -1),
+        col: current.col,
+      };
+      path.push(current);
+    }
+  };
+
+  if (verticalFirst) {
+    appendVerticalSteps();
+    appendHorizontalSteps();
+    return;
   }
 
-  while (current.row !== to.row) {
-    current = {
-      row: current.row + (to.row > current.row ? 1 : -1),
-      col: current.col,
-    };
-    path.push(current);
+  appendHorizontalSteps();
+  appendVerticalSteps();
+};
+
+const appendPathAndClearTargets = (
+  path: GridPosition[],
+  segment: GridPosition[],
+  remainingTargets: Map<string, ContributionTarget>,
+): void => {
+  for (const position of segment) {
+    const key = getPositionKey(position);
+
+    if (key !== getPositionKey(path[path.length - 1])) {
+      path.push(position);
+    }
+
+    remainingTargets.delete(key);
   }
+};
+
+const chooseWeightedRandomTarget = (
+  remainingTargets: Map<string, ContributionTarget>,
+  current: GridPosition,
+  random: SeededRandom,
+): GridPosition | null => {
+  const weightedTargets = [...remainingTargets.values()].map((target) => {
+    const distance = manhattanDistance(current, target.position);
+    const levelWeight = 1 + target.level * 0.75;
+    const distanceWeight = 1 / Math.pow(distance + 1, 1.45);
+
+    return {
+      position: target.position,
+      weight: levelWeight * distanceWeight,
+    };
+  });
+  const totalWeight = weightedTargets.reduce(
+    (sum, target) => sum + target.weight,
+    0,
+  );
+  let cursor = random() * totalWeight;
+
+  for (const target of weightedTargets) {
+    cursor -= target.weight;
+
+    if (cursor <= 0) {
+      return target.position;
+    }
+  }
+
+  return weightedTargets[weightedTargets.length - 1]?.position ?? null;
+};
+
+const comparePositionsByNearest = (
+  current: GridPosition,
+  first: GridPosition,
+  second: GridPosition,
+): number => {
+  const distanceDelta =
+    manhattanDistance(current, first) - manhattanDistance(current, second);
+
+  if (distanceDelta !== 0) {
+    return distanceDelta;
+  }
+
+  if (first.col !== second.col) {
+    return first.col - second.col;
+  }
+
+  return first.row - second.row;
 };
 
 const createNearestPath = (
@@ -45,36 +151,18 @@ const createNearestPath = (
     return createTraversalPath(rows, columns, "snake");
   }
 
-  const remainingTargets = grid
-    .flatMap((row, rowIndex) =>
-      row.map((level, colIndex) => ({
-        level,
-        position: { row: rowIndex, col: colIndex },
-      })),
-    )
-    .filter((item) => item.level > 0)
-    .map((item) => item.position);
-
+  const remainingTargets = createTargetMap(grid);
   const path: GridPosition[] = [start];
   let current = start;
 
-  while (remainingTargets.length > 0) {
-    remainingTargets.sort((first, second) => {
-      const distanceDelta =
-        manhattanDistance(current, first) - manhattanDistance(current, second);
+  while (remainingTargets.size > 0) {
+    const sortedTargets = [...remainingTargets]
+      .map(([key]) => toPosition(key))
+      .sort((first, second) =>
+        comparePositionsByNearest(current, first, second),
+      );
 
-      if (distanceDelta !== 0) {
-        return distanceDelta;
-      }
-
-      if (first.col !== second.col) {
-        return first.col - second.col;
-      }
-
-      return first.row - second.row;
-    });
-
-    const nextTarget = remainingTargets.shift();
+    const nextTarget = sortedTargets[0];
 
     if (!nextTarget) {
       break;
@@ -82,14 +170,47 @@ const createNearestPath = (
 
     const segment: GridPosition[] = [];
     appendManhattanPath(segment, current, nextTarget);
+    appendPathAndClearTargets(path, segment, remainingTargets);
 
-    for (const position of segment) {
-      const key = getPositionKey(position);
+    current = nextTarget;
+  }
 
-      if (key !== getPositionKey(path[path.length - 1])) {
-        path.push(position);
-      }
+  return path;
+};
+
+const createRandomTargetPath = (
+  rows: number,
+  columns: number,
+  randomSeed: number,
+  grid?: ContributionGridData,
+): GridPosition[] => {
+  const start = { row: 0, col: 0 };
+
+  if (!grid) {
+    return createTraversalPath(rows, columns, "snake");
+  }
+
+  const remainingTargets = createTargetMap(grid);
+  const path: GridPosition[] = [start];
+  let current = start;
+  const random = createSeededRandom(randomSeed);
+
+  while (remainingTargets.size > 0) {
+    const nextTarget = chooseWeightedRandomTarget(
+      remainingTargets,
+      current,
+      random,
+    );
+
+    if (!nextTarget) {
+      break;
     }
+
+    const segment: GridPosition[] = [];
+    const verticalFirst = random() > 0.5;
+
+    appendManhattanPath(segment, current, nextTarget, verticalFirst);
+    appendPathAndClearTargets(path, segment, remainingTargets);
 
     current = nextTarget;
   }
@@ -108,6 +229,10 @@ export const createTraversalPath = (
 
   if (mode === "nearest") {
     return createNearestPath(rows, columns, grid);
+  }
+
+  if (mode === "random") {
+    return createRandomTargetPath(rows, columns, randomSeed, grid);
   }
 
   if (mode === "top-to-bottom") {
@@ -130,21 +255,6 @@ export const createTraversalPath = (
       const col = isLeftToRight ? step : columns - 1 - step;
       path.push({ row, col });
     }
-  }
-
-  if (mode === "random") {
-    const shuffledPath = [...path];
-    let seed = randomSeed + 1;
-
-    for (let index = shuffledPath.length - 1; index > 0; index -= 1) {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      const targetIndex = seed % (index + 1);
-      const currentItem = shuffledPath[index];
-      shuffledPath[index] = shuffledPath[targetIndex];
-      shuffledPath[targetIndex] = currentItem;
-    }
-
-    return shuffledPath;
   }
 
   return path;

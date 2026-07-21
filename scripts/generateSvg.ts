@@ -5,6 +5,7 @@ import { mockContributions } from "../src/data/mockContributions";
 import { fetchContributionGrid } from "../src/github/fetchContributions";
 import { generateContributionPetSvg } from "../src/renderers/svgRenderer";
 import type { TraversalMode } from "../src/types/contribution";
+import { hashStringToSeed } from "../src/utils/random";
 
 type CliOptions = {
   username?: string;
@@ -12,6 +13,7 @@ type CliOptions = {
   traversalMode: TraversalMode;
   rows: number;
   columns: number;
+  randomSeed?: number;
 };
 
 const traversalModes: TraversalMode[] = [
@@ -66,6 +68,12 @@ const parseCliOptions = (args: string[]): CliOptions => {
       index += 1;
       continue;
     }
+
+    if (arg === "--seed" && value) {
+      options.randomSeed = Number(value);
+      index += 1;
+      continue;
+    }
   }
 
   if (!Number.isInteger(options.rows) || options.rows < 1) {
@@ -83,6 +91,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const options = parseCliOptions(process.argv.slice(2));
+const dailySeedSource = [
+  options.username ?? "mock",
+  new Date().toISOString().slice(0, 10),
+  options.traversalMode,
+  options.rows,
+  options.columns,
+].join(":");
+const randomSeed = options.randomSeed ?? hashStringToSeed(dailySeedSource);
 const characterDirections = ["front", "left", "right", "back"] as const;
 const outputPath = path.resolve(rootDir, options.output);
 const outputDir = path.dirname(outputPath);
@@ -122,6 +138,7 @@ const svg = generateContributionPetSvg({
     string
   >,
   traversalMode: options.traversalMode,
+  randomSeed,
 });
 
 await mkdir(outputDir, { recursive: true });
